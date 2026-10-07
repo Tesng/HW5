@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小狐狸郵差</title>
+<meta name="description" content="趕在天黑前，把最後一班信送到街尾的郵筒。一關的像素風平台跳躍小遊戲。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%8A%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --night: #1b1430;
+    --paper: #f3e3c3;
+    --paper-light: #fbf1dc;
+    --ink: #2a1d3a;
+    --ink-soft: #6a5878;
+    --air-red: #c8403a;
+    --air-blue: #2c4f9a;
+    --post-green: #2f8f5b;
+    --s: 2;
+    --serif: "Noto Serif TC", "Source Han Serif TC", "Songti TC", "PMingLiU", serif;
+    --sans: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--night); overflow: hidden; }
+  body { display: grid; place-items: center; font-family: var(--sans); color: var(--ink); }
+  #stage { position: relative; width: 960px; height: 540px; font-size: max(11px, calc(var(--s) * 5.5px)); }
+  #game { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+  /* 信封面板：航空信封的紅藍斜紋邊 */
+  .panel {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 68%; padding: 0.55em;
+    background: repeating-linear-gradient(-45deg,
+      var(--air-red) 0 0.9em, var(--paper-light) 0.9em 1.35em,
+      var(--air-blue) 1.35em 2.25em, var(--paper-light) 2.25em 2.7em);
+    box-shadow: 0 0.45em 0 rgba(10, 6, 22, 0.45);
+  }
+  .panel.hidden { display: none; }
+  .paper { position: relative; background: var(--paper); padding: 1.3em 1.6em 1.2em; }
+  .panel h1 {
+    font-family: var(--serif); font-weight: 900; font-size: 2.7em; line-height: 1.1;
+    letter-spacing: 0.12em; margin: 0 0 0.25em;
+  }
+  .panel h2 { font-family: var(--serif); font-weight: 900; font-size: 1.8em; letter-spacing: 0.1em; margin: 0 0 0.4em; }
+  .panel p { margin: 0 0 0.8em; line-height: 1.6; }
+  .tagline { color: var(--ink-soft); max-width: 22em; }
+
+  .stamp {
+    position: absolute; top: 1em; right: 1.2em; width: 4.6em; padding: 0.35em; background: var(--paper-light);
+    transform: rotate(4deg);
+    -webkit-mask: radial-gradient(circle 0.17em, #0000 96%, #000) -0.22em -0.22em / 0.44em 0.44em, linear-gradient(#000 0 0) content-box;
+    mask: radial-gradient(circle 0.17em, #0000 96%, #000) -0.22em -0.22em / 0.44em 0.44em, linear-gradient(#000 0 0) content-box;
+  }
+  .stamp canvas { display: block; width: 100%; image-rendering: pixelated; }
+
+  .record { display: grid; grid-template-columns: auto auto; gap: 0.15em 1.2em; margin: 0 0 0.9em;
+    padding: 0.6em 0.9em; border: 0.12em dashed var(--ink-soft); width: max-content; }
+  .record dt { color: var(--ink-soft); }
+  .record dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .record .empty { grid-column: 1 / -1; color: var(--ink-soft); }
+
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 0.3em 0.9em; margin: 0 0 1em; font-size: 0.92em; }
+  kbd {
+    font-family: var(--sans); font-size: 0.9em; padding: 0.05em 0.45em; border-radius: 0.25em;
+    background: var(--paper-light); border: 0.1em solid var(--ink-soft); border-bottom-width: 0.22em; white-space: nowrap;
+  }
+  .cta {
+    font: inherit; font-weight: 700; font-size: 1.15em; letter-spacing: 0.08em; cursor: pointer;
+    color: var(--paper-light); background: var(--post-green); border: none; padding: 0.5em 1.2em;
+    box-shadow: 0 0.2em 0 #1f5e3c;
+  }
+  .cta:hover { filter: brightness(1.08); }
+  .cta:focus-visible { outline: 0.18em solid var(--air-blue); outline-offset: 0.2em; }
+  .cta:active { transform: translateY(0.12em); box-shadow: 0 0.08em 0 #1f5e3c; }
+
+  .postmark {
+    position: absolute; top: 0.8em; right: 1.1em; transform: rotate(-10deg);
+    font-family: var(--serif); font-weight: 900; font-size: 1.9em; letter-spacing: 0.15em;
+    padding: 0.1em 0.45em; border: 0.14em solid currentColor; border-radius: 0.3em; opacity: 0.85;
+  }
+  .postmark.ok { color: var(--post-green); }
+  .postmark.ng { color: var(--air-red); }
+  table.score { border-collapse: collapse; margin: 0 0 1em; font-variant-numeric: tabular-nums; }
+  table.score th, table.score td { padding: 0.3em 1.1em 0.3em 0; text-align: left; }
+  table.score thead th { color: var(--ink-soft); font-weight: 400; border-bottom: 0.1em solid var(--ink-soft); }
+  table.score tbody td:first-child { color: var(--ink-soft); }
+  table.score td b { font-weight: 700; }
+  .new { display: inline-block; margin-left: 0.4em; padding: 0 0.35em; font-size: 0.75em; font-weight: 700;
+    color: var(--paper-light); background: var(--air-red); vertical-align: 0.15em; }
+  .note { font-size: 0.85em; color: var(--ink-soft); margin: 0.8em 0 0; }
+
+  #hint {
+    position: absolute; left: 50%; top: 11%; transform: translate(-50%, -0.6em); opacity: 0;
+    max-width: 80%; padding: 0.45em 0.9em; background: rgba(27, 20, 48, 0.86); color: #fbe6c8;
+    border-left: 0.3em solid #ffd34d; line-height: 1.5; pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+  }
+  #hint.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) { #hint { transition: none; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="480" height="270" aria-label="遊戲畫面"></canvas>
+  <div id="hint" role="status" aria-live="polite"></div>
+
+  <section id="titlePanel" class="panel">
+    <div class="paper">
+      <div class="stamp"><canvas id="stampCanvas" width="24" height="28"></canvas></div>
+      <h1>小狐狸郵差</h1>
+      <p class="tagline">趕在天黑前，從屋頂抄近路，把最後一班信送到街尾的郵筒。</p>
+      <dl class="record" id="titleRecord"></dl>
+      <div class="keys">
+        <span><kbd>←</kbd> <kbd>→</kbd></span><span>移動（也可用 A、D）</span>
+        <span><kbd>Space</kbd></span><span>跳躍，按住跳得更高（也可用 ↑、W）</span>
+        <span>空中再按一次</span><span>郵包滑翔，按住期間慢慢下降</span>
+        <span><kbd>P</kbd> <kbd>M</kbd> <kbd>R</kbd></span><span>暫停、靜音、從頭開始</span>
+      </div>
+      <button class="cta" id="startBtn" type="button">按 Enter 出發</button>
+    </div>
+  </section>
+
+  <section id="pausePanel" class="panel hidden">
+    <div class="paper">
+      <h2>暫停中</h2>
+      <p>按 <kbd>P</kbd> 或 <kbd>Esc</kbd> 繼續，按 <kbd>R</kbd> 從頭開始，按 <kbd>M</kbd> 切換靜音。</p>
+      <button class="cta" id="resumeBtn" type="button">繼續送信</button>
+    </div>
+  </section>
+
+  <section id="resultPanel" class="panel hidden">
+    <div class="paper">
+      <div class="postmark" id="postmark">已送達</div>
+      <h2 id="resultTitle">信送到了</h2>
+      <p id="resultLine" class="tagline"></p>
+      <table class="score">
+        <thead><tr><th></th><th>這一趟</th><th>最佳</th></tr></thead>
+        <tbody id="scoreBody"></tbody>
+      </table>
+      <button class="cta" id="againBtn" type="button">按 Enter 再送一趟</button>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   小狐狸郵差 — 單檔網頁遊戲
+   區塊：常數設定 / 關卡資料 / 美術 / 輸入 / 音訊 / 存檔 /
+         實體 / 狀態機 / 渲染 / 主迴圈
+   ============================================================ */
+
+/* ===== 常數設定 ===== */
+const VW = 480, VH = 270, T = 16;
+const PHYS = {
+  run: 150, accel: 900, decel: 1200, airAccel: 800, airDecel: 600,
+  grav: 1400, maxFall: 380,
+  jump: 420, jumpCut: 150,
+  glideFall: 60, glideTime: 1.5,
+  bounce: 280, bounceHigh: 480,
+  coyote: 0.1, buffer: 0.1,
+  invuln: 1.5, knock: 0.3,
+};
+const CAT_SPEED = 40, CROW_RANGE = 120, CROW_SPEED = 170;
+const STEP = 1 / 60;
+const STORE_KEY = 'foxpost.v1';
+
+/* ===== 關卡資料 =====
+   .  空白        #  建築（實心）   C  煙囪（實心）
+   =  曬衣繩（單向平台）            _  遮雨棚（單向平台）
+   o  信件   P  特別包裹   c  野貓   v  烏鴉
+   L  檢查點路燈   M  終點郵筒   S  起點                       */
+const LEVEL = [
+  "........................................................................................................................................................................................................",
+  "........................................................................................................................................................................................................",
+  "........................................................................................................................................................................................................",
+  "........................................................................................................................................................................................................",
+  ".......................................................................P................................................................................................................................",
+  "......................................................................===...............................................................................................................................",
+  "..............................................................C...o.o............................................v.................................................P....................................",
+  "..........................................................o.o.C.......o..........................................C................................................===.............v.....................",
+  ".....................................oo............o...o#########.......o........................................C..oo.............................v....o.................oo......C.....................",
+  "............o.....o.....o........................=======#########.........o.............o..................o..o..C...........o.............o.......C..............................C..o..................",
+  "..................C...........o.c.o...c.................#########.............o.c.....o......................######.....o......................o...C.o........................oc..C.....................",
+  "...S..o...o.....o.C.o.....##############....o...........#########..........############.....o....o..L..o.....######...######.....o.....o.....##########.....oc.o..o...c.o...#########.....o.o.o.....M...",
+  "############..#########...##############..#########.....#########..........############..##################..######...######...##########....##########...###############...#########..#################",
+  "############..#########...##############..#########.....#########..........############..##################..######...######...##########..._##########...###############...#########..#################",
+  "############..#########...##############..#########.....#########..........############..##################..######...######...##########.P..##########...###############...#########..#################",
+  "############..#########...##############..#########.....#########..........############..##################..######...######...##########__..##########...###############...#########..#################",
+  "############..#########...##############..#########.....#########..........############..##################..######...######...##########....##########...###############...#########..#################",
+];
+const LW = LEVEL[0].length, LH = LEVEL.length;
+const tileAt = (c, r) => (r < 0 || r >= LH || c < 0 || c >= LW) ? '.' : LEVEL[r][c];
+const solidAt = (c, r) => {
+  if (c < 0 || c >= LW) return true;
+  if (r < 0 || r >= LH) return false;
+  const ch = LEVEL[r][c];
+  return ch === '#' || ch === 'C';
+};
+const oneWayAt = (c, r) => { const ch = tileAt(c, r); return ch === '=' || ch === '_'; };
+
+/* 教學提示：玩家走到指定格數時出現一次 */
+const HINTS = [
+  { col: 0,   text: '← → 移動，Space 跳躍（按住跳得更高）' },
+  { col: 27,  text: '從上方踩野貓可以擊退牠，側面碰到會受傷' },
+  { col: 57,  text: '長空隙跳不過去？在空中再按一次跳鍵並按住，郵包滑翔' },
+  { col: 104, text: '小心烏鴉俯衝！牠踩不得，只能閃開' },
+  { col: 155, text: '踩野貓時按住跳鍵，可以彈得比平常更高' },
+];
+
+/* ===== 美術：像素圖 ===== */
+const ART = {"pal": {"k": "#2b1b33", "o": "#ec7a2e", "O": "#b9521f", "w": "#fbe6c8", "b": "#3a6cb8", "B": "#22427e", "y": "#ffd34d", "n": "#a0683a", "N": "#6a3f20", "e": "#1b0f1f", "g": "#7d6a8f", "G": "#4e3f63", "p": "#f2a0a8", "r": "#c8403a", "R": "#8e2622", "l": "#ffffff", "L": "#d9cbb0", "t": "#2f8f5b", "T": "#1f5e3c", "c": "#8fd1ff", "m": "#3b2a4a", "h": "#ffe9a8", "s": "#c79b6a", "S": "#8a6a45", "x": "#5a4a70", "X": "#382c4a"}, "spr": {"fox_idle": ["......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "kk...kkoowwk....", "kwokknkoowwk....", "kwookNnkowwk....", ".kookNnkooook...", "..kkkknkooook...", "......kOk.kOk...", "......kkk.kkk..."], "fox_idle2": ["................", "......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "kk...kkoowwk....", "kwokknkoowwk....", "kwookNnkowwk....", ".kookNnkooook...", "..kkkknkkkkkk...", "......kkk.kkk..."], "fox_run1": ["......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "k....kkoowwk....", "wkk.knkoowwk....", "wookNnkoowwk....", "kookNnkooook....", ".kkkknkoooook...", ".....kOkk..kOk..", ".....kkk....kk.."], "fox_run2": ["................", "......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "kk...kkoowwk....", "wwkknkoowwk.....", "kookNnkoowwk....", ".kkkNnkooook....", "....kkkOOkk.....", "......kkk......."], "fox_run3": ["......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "k....kkoowwk....", "wkk.knkoowwk....", "wookNnkoowwk....", "kookNnkooook....", ".kkkknkoooook...", "....kOk...kOk...", "....kkk...kkk..."], "fox_run4": ["................", "......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "kk...kkoowwk....", "wwkknkoowwk.....", "kookNnkoowwk....", ".kkkNnkooook....", "....kkOOkkk.....", ".......kkk......"], "fox_jump": ["......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "kk...kkoowwkk...", "kwokknkoowwkok..", "kwookNnkowwk.k..", ".kookNnkooook...", "..kkkknkoook....", ".....kOkkOk.....", ".....kk..kk....."], "fox_fall": ["......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...kooooookeowk.", "...koooooooowwwk", "....kooooowwwkk.", "kk..kkkoowwk....", "kwokknkoowwkk...", "kwookNnkowwkok..", ".kookNnkoooo.k..", "..kkkknkoooook..", "......kOk..kOk..", "......kk....kk.."], "fox_glide": ["..kkkkkkkkkkk...", ".kLlLlLlLlLlLk..", "kNnnnnnnnnnnnNk.", ".kk..k..kk..kk..", "...k.k.kkkkk....", "....kkkbbybbk...", "...kooBBBBBBBBk.", "..koooooooook...", "..kooooookeowk..", "..koooooooowwwk.", "kk.kooooowwwkk..", "kwkkkooowwk.....", "kwoooooowwk.....", ".kkkkooooook....", ".....kOk.kOk....", ".....kk..kk....."], "fox_hurt": ["......k.........", ".....kOk.kkkk...", ".....kOkkbbbbk..", "....kooobbybbbk.", "....kooBBBBBBBBk", "...koooooooook..", "...koooookkokwk.", "...koooooooowwwk", "....kooooowwkkk.", ".k...kkoowwk....", "kwk.knkoowwkk...", "kwokkNnkowwkok..", ".kookNnkooook...", "..kkkknkooook...", "....kOk...kOk...", "....kk.....kk..."], "cat1": ["..k...k.........", ".kgk.kgk........", ".kgggggk......k.", "kggegegk.....kgk", "kgpgggpgk....kgk", ".kgGGggggkkkkgk.", "..kggggggggggk..", "..kgggggggggGk..", "..kGgggggggGGk..", "..kgk.kgk.kgk...", "..kgk.kgk..kgk..", "..kk..kk....kk.."], "cat2": ["..k...k.........", ".kgk.kgk......k.", ".kgggggk.....kgk", "kggegegk.....kgk", "kgpgggpgk....kgk", ".kgGGggggkkkkgk.", "..kggggggggggk..", "..kgggggggggGk..", "..kGgggggggGGk..", "..kgk.kgk.kgk...", "...kgk.kgk.kgk..", "...kk...kk.kk..."], "cat_squish": ["................", "................", "................", "................", "................", "................", "................", "..k...k.........", ".kgkkkgkkkkkkk..", "kggxgxgggggggGk.", "kGgggggggggGGGk.", ".kkkkkkkkkkkkkk."], "crow_perch": ["................", "................", ".......kkk......", "......kmmmk.....", ".....kmmlmmkk...", "....kmmmmmmyyk..", "...kmmmmmmmkk...", "..kmmXmmmmk.....", ".kmmXXmmmk......", "kmmk.kmmk.......", ".kk...kyk.......", "......kyk......."], "crow_fly1": ["..kk.......kk...", "..kmk.....kmk...", "...kmk...kmk....", "...kmmkkkmmk....", "....kmmlmmkk....", "....kmmmmmmyyk..", "...kmmmmmmmkk...", "..kmmXmmmmk.....", ".kmmk.kkkk......", "kmk.............", "................", "................"], "crow_fly2": ["................", "................", ".......kkk......", "......kmmmk.....", ".....kmmlmmkk...", "..kkkmmmmmmyyk..", ".kmmmmmmmmmkk...", "kmmXmmmmmmmk....", ".kmXXkmmmkmk....", "..kkk.kkk.kmk...", "...........kmk..", "............kk.."], "letter": ["kkkkkkkkkk", "klLlllllLk", "kllLllLllk", "klllLLlllk", "kllllrrllk", "kllllrrllk", "klllllllLk", "kkkkkkkkkk"], "parcel": [".....kk.....", "....krrk....", "..kkkrrkkk..", ".kssssrssssk", "ksSssrrssSsk", "ksssssrsssSk", "krrrrrrrrrrk", "ksssssrsssSk", "ksssssrsssSk", "kSsssSrssSSk", "kSSSSSrSSSSk", ".kkkkkkkkkk."], "heart": [".kk...kk.", "krrk.krrk", "krlrkrrrk", "krrrrrrrk", ".krrrrrk.", "..krrrk..", "...krk...", "....k...."], "heart_empty": [".kk...kk.", "kXXk.kXXk", "kXXXkXXXk", "kXXXXXXXk", ".kXXXXXk.", "..kXXXk..", "...kXk...", "....k...."], "mailbox": ["....kkkkkkkk....", "..kkttttttttkk..", ".kttttttttttttk.", "kttTTTTTTTTTTttk", "kttkkkkkkkkkkttk", "ktttttttttttttTk", "kttkkkkkkkkkkttk", "kttkeeeeeeeektTk", "kttkkkkkkkkkkttk", "ktttttttttttttTk", "kttttyyyyyyttttk", "ktttyttttttytttk", "kttytytttytyttTk", "kttyttytyttyttTk", "kttytttytttytttk", "ktttyyyyyyyyttTk", "kttttttttttttTTk", "ktttttttttttttTk", "kttttttttttttTTk", "kTtttttttttttTTk", "kTTTTTTTTTTTTTTk", "kkkkkkkkkkkkkkkk", ".....kTTTTk.....", ".....kTttTk.....", ".....kTttTk.....", ".....kTttTk.....", "...kkkTTTTkkk...", "..kkkkkkkkkkkk.."]}};
+const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const SPR = {};
+for (const [name, rows] of Object.entries(ART.spr)) {
+  const w = rows[0].length, h = rows.length;
+  const n = mkCanvas(w, h), f = mkCanvas(w, h);
+  const gn = n.getContext('2d'), gf = f.getContext('2d');
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === '.') return;
+    gn.fillStyle = gf.fillStyle = ART.pal[ch];
+    gn.fillRect(x, y, 1, 1);
+    gf.fillRect(w - 1 - x, y, 1, 1);
+  }));
+  SPR[name] = { n, f, w, h };
+}
+
+function rng(seed) {
+  return () => {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const hash = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const lerpColor = (a, b, t) => {
+  const pa = a.match(/\w\w/g).map(v => parseInt(v, 16)), pb = b.match(/\w\w/g).map(v => parseInt(v, 16));
+  return 'rgb(' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(',') + ')';
+};
+
+/* 天空：分段色帶 */
+function buildSky() {
+  const cv = mkCanvas(VW, VH), g = cv.getContext('2d');
+  const stops = [[0, '#241a4a'], [70, '#45286a'], [130, '#8a3f72'], [175, '#d8634f'], [215, '#f39a4f'], [270, '#ffcf73']];
+  for (let y = 0; y < VH; y += 3) {
+    let i = 0; while (i < stops.length - 2 && y >= stops[i + 1][0]) i++;
+    const [y0, c0] = stops[i], [y1, c1] = stops[i + 1];
+    const t = Math.min(1, (y - y0) / (y1 - y0));
+    g.fillStyle = lerpColor(c0, c1, Math.round(t * 4) / 4);
+    g.fillRect(0, y, VW, 3);
+  }
+  const r = rng(7);
+  g.fillStyle = '#ffe9c8';
+  for (let i = 0; i < 40; i++) { const x = r() * VW, y = r() * 90; g.globalAlpha = 0.3 + r() * 0.6; g.fillRect(x | 0, y | 0, 1, 1); }
+  g.globalAlpha = 1;
+  return cv;
+}
+/* 夕陽：下半部切成橫條 */
+function buildSun() {
+  const R = 46, cv = mkCanvas(R * 2 + 2, R * 2 + 2), g = cv.getContext('2d');
+  for (let y = -R; y <= R; y++) {
+    const half = Math.floor(Math.sqrt(R * R - y * y));
+    if (y > 4 && (y % 7 === 0 || y % 7 === 1 && y > 20)) continue;
+    g.fillStyle = y < -10 ? '#ffe7a6' : '#ffd17a';
+    g.fillRect(R + 1 - half, R + 1 + y, half * 2, 1);
+  }
+  return cv;
+}
+/* 雲層（捲動 0.2 倍） */
+function buildClouds() {
+  const w = Math.ceil(LW * T * 0.2) + VW + 40, cv = mkCanvas(w, VH), g = cv.getContext('2d'), r = rng(11);
+  for (let x = -40; x < w; x += 110 + r() * 120) {
+    const y = 30 + r() * 90, len = 50 + r() * 90;
+    g.fillStyle = '#c9718f';
+    g.fillRect(x | 0, y | 0, len | 0, 6);
+    g.fillRect((x + 10) | 0, (y - 4) | 0, (len * 0.5) | 0, 4);
+    g.fillRect((x + len * 0.35) | 0, (y - 8) | 0, (len * 0.3) | 0, 4);
+    g.fillStyle = '#f2a08a';
+    g.fillRect((x + 4) | 0, (y + 6) | 0, (len - 8) | 0, 2);
+  }
+  return cv;
+}
+/* 城市剪影（捲動 0.5 倍） */
+function buildCity() {
+  const w = Math.ceil(LW * T * 0.5) + VW + 40, cv = mkCanvas(w, VH), g = cv.getContext('2d'), r = rng(23);
+  const rowDraw = (base, color, win, minH, maxH, seedStep) => {
+    for (let x = -10; x < w;) {
+      const bw = 18 + (r() * 34 | 0), bh = minH + (r() * (maxH - minH) | 0), y = VH - bh;
+      g.fillStyle = color; g.fillRect(x, y, bw, bh);
+      if (r() < 0.25) g.fillRect(x + (bw / 2 | 0), y - 10, 1, 10);
+      if (r() < 0.2) { g.fillRect(x + 4, y - 7, 10, 6); g.fillRect(x + 5, y - 1, 1, 2); g.fillRect(x + 12, y - 1, 1, 2); }
+      for (let wy = y + 6; wy < VH - 4; wy += 7) for (let wx = x + 3; wx < x + bw - 3; wx += 5) {
+        if (r() < win) { g.fillStyle = r() < 0.7 ? '#ffb86b' : '#ffe08a'; g.globalAlpha = 0.55 + r() * 0.4; g.fillRect(wx, wy, 2, 3); g.globalAlpha = 1; }
+      }
+      x += bw + (r() * seedStep | 0);
+    }
+  };
+  rowDraw(0, '#4a2c5e', 0.06, 70, 150, 4);
+  rowDraw(0, '#35214a', 0.1, 40, 105, 10);
+  return cv;
+}
+
+/* 磁磚層：整關預先畫成一張圖 */
+const WALLS = [
+  { wall: '#5b3f6e', dark: '#4a3260', side: '#3a2650' },
+  { wall: '#6e4760', dark: '#5a3850', side: '#432840' },
+  { wall: '#4d4a78', dark: '#3f3c66', side: '#2f2c50' },
+  { wall: '#735052', dark: '#5f4043', side: '#463033' },
+];
+const CLOTH = ['#e86a5c', '#f2d16b', '#7fc4d8', '#f7f1e3', '#9fd38b', '#c58fd6'];
+function buildTiles() {
+  const cv = mkCanvas(LW * T, LH * T), g = cv.getContext('2d');
+  // 建築編號：屋頂高度相同且相連的欄位視為同一棟
+  const bId = new Array(LW).fill(-1), bLeft = [], bTop = [];
+  let id = -1, prevTop = -1;
+  for (let c = 0; c < LW; c++) {
+    let top = -1;
+    for (let r = 0; r < LH; r++) if (LEVEL[r][c] === '#') { top = r; break; }
+    if (top < 0) { prevTop = -1; continue; }
+    if (top !== prevTop) { id++; bLeft[id] = c; bTop[id] = top; }
+    bId[c] = id; prevTop = top;
+  }
+  for (let c = 0; c < LW; c++) for (let r = 0; r < LH; r++) {
+    const ch = LEVEL[r][c], x = c * T, y = r * T;
+    if (ch === '#') {
+      const b = bId[c], pal = WALLS[b % WALLS.length], roof = tileAt(c, r - 1) !== '#';
+      g.fillStyle = pal.wall; g.fillRect(x, y, T, T);
+      g.fillStyle = pal.dark;
+      for (let i = 0; i < 4; i++) {
+        g.fillRect(x, y + i * 4 + 3, T, 1);
+        g.fillRect(x + ((i + r) % 2 ? 3 : 11), y + i * 4, 1, 3);
+      }
+      const lc = c - bLeft[b], lr = r - bTop[b];
+      if (lc % 3 === 1 && lr % 2 === 1 && tileAt(c + 1, r) === '#') {
+        const lit = hash(c, r) < 0.6;
+        g.fillStyle = '#2b1b33'; g.fillRect(x + 3, y + 2, 12, 12);
+        g.fillStyle = lit ? '#ffd27a' : '#3b2d55'; g.fillRect(x + 4, y + 3, 10, 10);
+        if (lit) { g.fillStyle = '#fff1c2'; g.fillRect(x + 5, y + 4, 3, 3); }
+        g.fillStyle = '#2b1b33'; g.fillRect(x + 8, y + 3, 1, 10); g.fillRect(x + 4, y + 8, 10, 1);
+      }
+      if (tileAt(c - 1, r) !== '#') { g.fillStyle = pal.side; g.fillRect(x, y, 2, T); }
+      if (tileAt(c + 1, r) !== '#') { g.fillStyle = pal.side; g.fillRect(x + T - 2, y, 2, T); }
+      if (roof) {
+        const ext0 = tileAt(c - 1, r) !== '#' ? -2 : 0, ext1 = tileAt(c + 1, r) !== '#' ? 2 : 0;
+        g.fillStyle = '#c4583a'; g.fillRect(x + ext0, y, T - ext0 + ext1, 6);
+        g.fillStyle = '#8e3a2a';
+        for (let i = 0; i < 4; i++) g.fillRect(x + i * 4, y + 5, 3, 1);
+        g.fillRect(x + ext0, y + 6, T - ext0 + ext1, 1);
+        g.fillStyle = '#ec8c5c';
+        for (let i = 0; i < 4; i++) g.fillRect(x + i * 4 + 1, y + 1, 2, 1);
+        g.fillStyle = 'rgba(20,10,30,0.35)'; g.fillRect(x, y + 7, T, 2);
+      }
+    } else if (ch === 'C') {
+      g.fillStyle = '#8a3d33'; g.fillRect(x + 1, y, 14, T);
+      g.fillStyle = '#6a2c26';
+      for (let i = 0; i < 4; i++) { g.fillRect(x + 1, y + i * 4 + 3, 14, 1); g.fillRect(x + ((i % 2) ? 5 : 10), y + i * 4, 1, 3); }
+      g.fillStyle = '#a85a48'; g.fillRect(x + 1, y, 1, T);
+      if (tileAt(c, r - 1) !== 'C') { g.fillStyle = '#3a2633'; g.fillRect(x - 1, y, 18, 4); g.fillStyle = '#5a3a46'; g.fillRect(x - 1, y, 18, 1); }
+    } else if (ch === '=') {
+      const leftEnd = tileAt(c - 1, r) !== '=', rightEnd = tileAt(c + 1, r) !== '=';
+      const pole = px => {
+        g.fillStyle = '#3b2a3f';
+        let rr = r + 1; while (rr < LH && !solidAt(Math.floor(px / T), rr)) rr++;
+        g.fillRect(px, y - 3, 2, rr * T - (y - 3));
+        g.fillRect(px - 2, y - 3, 6, 2);
+      };
+      if (leftEnd && !solidAt(c - 1, r)) pole(x);
+      if (rightEnd && !solidAt(c + 1, r)) pole(x + T - 2);
+      g.fillStyle = '#2b1b33'; g.fillRect(x, y + 1, T, 1);
+      const k = Math.floor(hash(c, r * 3) * 5), col = CLOTH[Math.floor(hash(r, c * 5) * CLOTH.length)];
+      g.fillStyle = col;
+      if (k === 0) { g.fillRect(x + 3, y + 2, 10, 3); g.fillRect(x + 5, y + 5, 6, 6); }
+      else if (k === 1) { g.fillRect(x + 4, y + 2, 8, 10); g.fillStyle = 'rgba(0,0,0,0.15)'; g.fillRect(x + 4, y + 9, 8, 1); }
+      else if (k === 2) { g.fillRect(x + 3, y + 2, 3, 7); g.fillRect(x + 3, y + 8, 5, 2); g.fillRect(x + 10, y + 2, 3, 7); g.fillRect(x + 10, y + 8, 5, 2); }
+      else if (k === 3) { g.fillRect(x + 5, y + 2, 6, 4); g.fillRect(x + 4, y + 6, 8, 6); }
+      g.fillStyle = '#f3e3c3';
+      if (k !== 4) { g.fillRect(x + 4, y, 1, 3); g.fillRect(x + 11, y, 1, 3); }
+    } else if (ch === '_') {
+      for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#f3e3c3' : '#c8403a'; g.fillRect(x + i * 2, y, 2, 6); }
+      for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#f3e3c3' : '#c8403a'; g.fillRect(x + i * 2, y + 6, 2, i % 2 ? 1 : 2); }
+      g.fillStyle = '#2b1b33'; g.fillRect(x, y, T, 1);
+      if (solidAt(c - 1, r) || solidAt(c + 1, r)) {
+        const bx = solidAt(c - 1, r) ? x : x + T - 2;
+        g.fillRect(bx, y + 1, 2, 10);
+      }
+    }
+  }
+  return cv;
+}
+
+/* 郵票上的小狐狸 */
+function drawStamp() {
+  const cv = document.getElementById('stampCanvas'), g = cv.getContext('2d');
+  g.fillStyle = '#f2a65a'; g.fillRect(0, 0, 24, 28);
+  g.fillStyle = '#ffd17a'; g.beginPath(); g.arc(17, 9, 6, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#c4583a'; g.fillRect(0, 22, 24, 6);
+  g.drawImage(SPR.fox_idle.n, 4, 6);
+}
+
+/* HUD 用 3x5 像素數字 */
+const GLYPH = {
+  '0': '111101101101111', '1': '010110010010111', '2': '111001111100111', '3': '111001111001111',
+  '4': '101101111001001', '5': '111100111001111', '6': '111100111101111', '7': '111001010010010',
+  '8': '111101111101111', '9': '111101111001111', ':': '000010000010000', '.': '000000000000010',
+  '/': '001001010100100', '-': '000000111000000',
+};
+function drawText(g, str, x, y, scale, color, align) {
+  const adv = 4 * scale, w = str.length * adv - scale;
+  if (align === 'right') x -= w; else if (align === 'center') x -= w / 2;
+  x = Math.round(x);
+  for (const pass of [0, 1]) {
+    g.fillStyle = pass ? color : '#1b1430';
+    const off = pass ? 0 : scale;
+    [...str].forEach((ch, i) => {
+      const gl = GLYPH[ch]; if (!gl) return;
+      for (let p = 0; p < 15; p++) if (gl[p] === '1')
+        g.fillRect(x + i * adv + (p % 3) * scale, y + off + Math.floor(p / 3) * scale, scale, scale);
+    });
+  }
+}
+
+/* ===== 輸入 ===== */
+const KEYMAP = {
+  ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+  Space: 'jump', ArrowUp: 'jump', KeyW: 'jump',
+  KeyP: 'pause', Escape: 'pause', KeyR: 'restart', KeyM: 'mute', Enter: 'enter', NumpadEnter: 'enter',
+};
+const keys = { down: new Set(), pressed: new Set() };
+addEventListener('keydown', e => {
+  const a = KEYMAP[e.code];
+  if (!a) return;
+  e.preventDefault();
+  if (e.repeat) return;
+  keys.down.add(a); keys.pressed.add(a);
+  onMetaKey(a);
+});
+addEventListener('keyup', e => { const a = KEYMAP[e.code]; if (a) keys.down.delete(a); });
+addEventListener('blur', () => { keys.down.clear(); if (state === 'playing') pauseGame(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'playing') pauseGame(); });
+
+/* ===== 音訊（Web Audio 即時合成） ===== */
+const A = { ctx: null, master: null, sfx: null, music: null, noise: null, wind: null, muted: false, timer: 0, on: false, next: 0, step: 0 };
+function audioInit() {
+  if (A.ctx) { if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    A.ctx = new AC();
+    A.master = A.ctx.createGain(); A.master.gain.value = A.muted ? 0 : 1; A.master.connect(A.ctx.destination);
+    A.sfx = A.ctx.createGain(); A.sfx.gain.value = 0.55; A.sfx.connect(A.master);
+    A.music = A.ctx.createGain(); A.music.gain.value = 0.32; A.music.connect(A.master);
+    const len = A.ctx.sampleRate, buf = A.ctx.createBuffer(1, len, A.ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    A.noise = buf;
+    const src = A.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = A.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 0.8;
+    A.wind = A.ctx.createGain(); A.wind.gain.value = 0;
+    src.connect(bp).connect(A.wind).connect(A.sfx); src.start();
+  } catch (err) { A.ctx = null; }
+}
+function tone(type, f0, f1, dur, vol, delay = 0, bus) {
+  if (!A.ctx) return;
+  const t = A.ctx.currentTime + delay, o = A.ctx.createOscillator(), g = A.ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(bus || A.sfx); o.start(t); o.stop(t + dur + 0.05);
+}
+function noise(dur, vol, freq, delay = 0, type = 'lowpass', bus) {
+  if (!A.ctx) return;
+  const t = A.ctx.currentTime + delay, s = A.ctx.createBufferSource(), f = A.ctx.createBiquadFilter(), g = A.ctx.createGain();
+  s.buffer = A.noise; f.type = type; f.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(bus || A.sfx); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+}
+const SFX = {
+  jump() { tone('square', 280, 620, 0.13, 0.12); },
+  letter() { tone('square', 988, 988, 0.06, 0.09); tone('square', 1319, 1319, 0.1, 0.09, 0.06); },
+  parcel() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone('square', f, f, 0.09, 0.1, i * 0.06)); },
+  stomp() { tone('square', 420, 110, 0.14, 0.14); noise(0.08, 0.15, 1500); },
+  hurt() { tone('sawtooth', 240, 70, 0.32, 0.14); noise(0.22, 0.2, 1100); },
+  caw() { tone('sawtooth', 900, 480, 0.16, 0.07); tone('sawtooth', 820, 430, 0.16, 0.06, 0.2); },
+  checkpoint() { tone('triangle', 880, 880, 0.18, 0.18); tone('triangle', 1320, 1320, 0.4, 0.16, 0.1); },
+  land() { noise(0.05, 0.08, 500); },
+  clear() { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone('square', f, f, i === 6 ? 0.6 : 0.13, 0.1, i * 0.12)); },
+  over() { [392, 330, 262].forEach((f, i) => tone('square', f, f * 0.98, 0.22, 0.1, i * 0.22)); tone('triangle', 131, 98, 0.8, 0.18, 0.66); },
+};
+function setWind(on) {
+  if (!A.wind || A.windOn === on) return;
+  A.windOn = on; A.wind.gain.setTargetAtTime(on ? 0.22 : 0, A.ctx.currentTime, 0.06);
+}
+function setMute(m) {
+  A.muted = m; record.muted = m; saveRecord();
+  if (A.master) A.master.gain.setTargetAtTime(m ? 0 : 1, A.ctx.currentTime, 0.02);
+}
+
+/* 背景音樂：原創 8-bit 小曲，16 小節循環，每格八分音符 */
+const BPM = 144, EIGHTH = 60 / BPM / 2;
+const MELODY = [
+  'E5 - G5 A5 G5 - E5 -', 'C5 - E5 - A5 - G5 -', 'F5 - A5 - C6 - A5 G5', 'G5 - - - D5 - . .',
+  'E5 - G5 A5 G5 - E5 C5', 'D5 - E5 - C5 - A4 -', 'F5 - E5 - D5 - C5 D5', 'C5 - - - . . G4 -',
+  'A5 - A5 G5 F5 - A5 -', 'G5 - - - D5 - G5 -', 'E5 - G5 - B5 - G5 -', 'A5 - - - G5 - E5 -',
+  'E5 - G5 A5 G5 - E5 -', 'C5 - E5 - A5 - G5 -', 'F5 - A5 - C6 - A5 -', 'D6 - B5 - G5 - . .',
+];
+const ROOTS = ['C3', 'A2', 'F2', 'G2', 'C3', 'A2', 'D3', 'C3', 'F2', 'G2', 'E3', 'A2', 'C3', 'A2', 'F2', 'G2'];
+const noteFreq = n => {
+  const m = n.match(/^([A-G])(#?)(\d)$/); const base = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]];
+  const midi = 12 * (+m[3] + 1) + base + (m[2] ? 1 : 0); return 440 * Math.pow(2, (midi - 69) / 12);
+};
+const SONG = (() => {
+  const toks = MELODY.join(' ').split(/\s+/), out = new Array(toks.length).fill(null);
+  toks.forEach((tk, i) => {
+    if (tk === '-' || tk === '.') return;
+    let len = 1; while (toks[i + len] === '-') len++;
+    out[i] = { f: noteFreq(tk), len };
+  });
+  return out;
+})();
+function musicNote(type, f, t, dur, vol) {
+  const o = A.ctx.createOscillator(), g = A.ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(vol * 0.55, t + dur * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(A.music); o.start(t); o.stop(t + dur + 0.05);
+}
+function scheduleMusic() {
+  if (!A.on || !A.ctx) return;
+  const now = A.ctx.currentTime;
+  if (A.next < now - 0.2) A.next = now + 0.05;
+  while (A.next < now + 0.12) {
+    const s = A.step, t = A.next, bar = Math.floor(s / 8);
+    const n = SONG[s]; if (n) musicNote('square', n.f, t, n.len * EIGHTH * 0.92, 0.07);
+    if (s % 2 === 0) {
+      const root = noteFreq(ROOTS[bar]); musicNote('triangle', (s % 4 === 0) ? root : root * 1.5, t, EIGHTH * 1.8, 0.16);
+    } else noise(0.03, 0.035, 7000, t - now, 'highpass', A.music);
+    A.next += EIGHTH; A.step = (s + 1) % SONG.length;
+  }
+}
+function musicStart() { if (!A.ctx) return; A.on = true; A.step = 0; A.next = A.ctx.currentTime + 0.15; A.music.gain.setTargetAtTime(0.32, A.ctx.currentTime, 0.02); if (!A.timer) A.timer = setInterval(scheduleMusic, 25); }
+function musicStop() { A.on = false; }
+function musicDuck(d) { if (A.music) A.music.gain.setTargetAtTime(d ? 0.1 : 0.32, A.ctx.currentTime, 0.05); }
+
+/* ===== 存檔（localStorage） ===== */
+let record = { bestTime: null, bestLetters: 0, bestParcels: 0, muted: false };
+function loadRecord() {
+  try { const raw = localStorage.getItem(STORE_KEY); if (raw) record = Object.assign(record, JSON.parse(raw)); } catch (err) { /* 無法讀取就用預設值 */ }
+  A.muted = !!record.muted;
+}
+function saveRecord() { try { localStorage.setItem(STORE_KEY, JSON.stringify(record)); } catch (err) { /* 無法保存時遊戲照常進行 */ } }
+const fmtTime = s => {
+  const cs = Math.floor(s * 100), m = Math.floor(cs / 6000), sec = Math.floor(cs / 100) % 60, c = cs % 100;
+  return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + '.' + String(c).padStart(2, '0');
+};
+
+/* ===== 實體 ===== */
+let player, cats, crows, letters, parcels, lamp, mailbox, particles, checkpoint, hintsShown;
+let gotLetters, gotParcels, runTime, timerOn, totalLetters, totalParcels;
+const cam = { x: 0 };
+
+function resetLevel() {
+  cats = []; crows = []; letters = []; parcels = []; particles = []; lamp = null; mailbox = null;
+  let sx = 3, sy = 11;
+  for (let r = 0; r < LH; r++) for (let c = 0; c < LW; c++) {
+    const ch = LEVEL[r][c];
+    if (ch === 'o') letters.push({ x: c * T + 8, y: r * T + 8, got: false });
+    else if (ch === 'P') parcels.push({ x: c * T + 8, y: r * T + 8, got: false });
+    else if (ch === 'c') cats.push({ x: c * T + 1, y: (r + 1) * T - 10, w: 14, h: 10, vx: 0, vy: 0, dir: -1, alive: true, squish: 0, anim: Math.random() });
+    else if (ch === 'v') crows.push({ x: c * T + 2, y: (r + 1) * T - 10, w: 12, h: 9, vx: 0, vy: 0, state: 'perch', t: 0, face: -1, dead: false });
+    else if (ch === 'L') lamp = { x: c * T + 8, base: (r + 1) * T, lit: false };
+    else if (ch === 'M') mailbox = { x: c * T, y: (r + 1) * T - 28, w: 16, h: 28 };
+    else if (ch === 'S') { sx = c; sy = r; }
+  }
+  totalLetters = letters.length; totalParcels = parcels.length;
+  player = {
+    x: sx * T + 3, y: (sy + 1) * T - 14, w: 10, h: 14, vx: 0, vy: 0, face: 1,
+    onGround: true, coyote: 0, jumpBuf: 0, canCut: false, gliding: false, glideActive: false, glideLeft: PHYS.glideTime,
+    invuln: 0, hurtT: 0, hearts: 3, runDist: 0, idleT: 0, prevBottom: 0,
+  };
+  checkpoint = { x: player.x, y: player.y };
+  gotLetters = 0; gotParcels = 0; runTime = 0; timerOn = false; hintsShown = new Set();
+  cam.x = 0; smokeT = 0;
+}
+
+function overlap(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+function moveX(o, dx) {
+  o.x += dx;
+  const r0 = Math.floor(o.y / T), r1 = Math.floor((o.y + o.h - 0.01) / T);
+  if (dx > 0) {
+    const c = Math.floor((o.x + o.w - 0.01) / T);
+    for (let r = r0; r <= r1; r++) if (solidAt(c, r)) { o.x = c * T - o.w; o.vx = 0; return true; }
+  } else if (dx < 0) {
+    const c = Math.floor(o.x / T);
+    for (let r = r0; r <= r1; r++) if (solidAt(c, r)) { o.x = (c + 1) * T; o.vx = 0; return true; }
+  }
+  return false;
+}
+function moveY(o, dy) {
+  const prevBottom = o.y + o.h;
+  o.y += dy; o.onGround = false;
+  const c0 = Math.floor(o.x / T), c1 = Math.floor((o.x + o.w - 0.01) / T);
+  if (dy > 0) {
+    const r = Math.floor((o.y + o.h - 0.01) / T);
+    for (let c = c0; c <= c1; c++) {
+      if (solidAt(c, r) || (oneWayAt(c, r) && prevBottom <= r * T + 0.01)) { o.y = r * T - o.h; o.vy = 0; o.onGround = true; return; }
+    }
+  } else if (dy < 0) {
+    const r = Math.floor(o.y / T);
+    for (let c = c0; c <= c1; c++) if (solidAt(c, r)) { o.y = (r + 1) * T; o.vy = 0; return; }
+  }
+}
+function puff(x, y, n, colors, speed, life, grav = 0) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = speed * (0.4 + Math.random() * 0.6);
+    particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life, max: life, col: colors[i % colors.length], size: 1 + (Math.random() < 0.4 ? 1 : 0), grav });
+  }
+}
+
+function updatePlayer(dt) {
+  const p = player;
+  const left = keys.down.has('left'), right = keys.down.has('right'), held = keys.down.has('jump'), jp = keys.pressed.has('jump');
+  let dir = (right ? 1 : 0) - (left ? 1 : 0);
+  if (p.hurtT > 0) { p.hurtT -= dt; dir = 0; }
+  const acc = p.onGround ? PHYS.accel : PHYS.airAccel, dec = p.onGround ? PHYS.decel : PHYS.airDecel;
+  if (dir) {
+    if (Math.sign(p.vx) === -dir) p.vx += dir * dec * dt;
+    p.vx += dir * acc * dt; p.vx = Math.max(-PHYS.run, Math.min(PHYS.run, p.vx)); p.face = dir;
+  } else if (p.hurtT <= 0) {
+    const d = dec * dt; p.vx = Math.abs(p.vx) <= d ? 0 : p.vx - Math.sign(p.vx) * d;
+  }
+  p.coyote = p.onGround ? PHYS.coyote : p.coyote - dt;
+  p.jumpBuf = jp ? PHYS.buffer : p.jumpBuf - dt;
+  if (p.jumpBuf > 0 && p.coyote > 0) {
+    p.vy = -PHYS.jump; p.onGround = false; p.coyote = 0; p.jumpBuf = 0; p.canCut = true; SFX.jump();
+  } else if (jp && !p.onGround && p.glideLeft > 0) {
+    p.gliding = true;
+  }
+  if (!held) {
+    p.gliding = false;
+    if (p.canCut && p.vy < -PHYS.jumpCut) p.vy = -PHYS.jumpCut;
+    p.canCut = false;
+  }
+  p.vy = Math.min(PHYS.maxFall, p.vy + PHYS.grav * dt);
+  p.glideActive = false;
+  if (p.gliding && p.glideLeft > 0 && p.vy > 0) {
+    p.vy = Math.min(p.vy, PHYS.glideFall); p.glideLeft -= dt; p.glideActive = true;
+    if (p.glideLeft <= 0) p.gliding = false;
+  }
+  const wasGround = p.onGround, fallSpeed = p.vy;
+  p.prevBottom = p.y + p.h;
+  moveX(p, p.vx * dt);
+  if (p.x < 0) { p.x = 0; p.vx = 0; }
+  moveY(p, p.vy * dt);
+  if (p.onGround) {
+    p.glideLeft = PHYS.glideTime; p.gliding = false;
+    if (!wasGround && fallSpeed > 200) { puff(p.x + p.w / 2, p.y + p.h, 5, ['#f3e3c3', '#d9cbb0'], 30, 0.3); SFX.land(); }
+  }
+  p.runDist += Math.abs(p.vx) * dt;
+  if (p.invuln > 0) p.invuln -= dt;
+  if (p.y > LH * T + 24) fallDown();
+}
+
+function hurt(fromX) {
+  const p = player;
+  if (p.invuln > 0 || state !== 'playing') return;
+  p.hearts--; SFX.hurt();
+  p.invuln = PHYS.invuln; p.hurtT = PHYS.knock;
+  p.vx = (p.x + p.w / 2 < fromX ? -1 : 1) * 140; p.vy = -220; p.gliding = false; p.canCut = false;
+  puff(p.x + p.w / 2, p.y + p.h / 2, 8, ['#ffffff', '#ec7a2e'], 70, 0.35);
+  if (p.hearts <= 0) endRun(false);
+}
+function fallDown() {
+  const p = player;
+  p.hearts--; SFX.hurt();
+  if (p.hearts <= 0) { p.y = LH * T + 40; p.vy = 0; endRun(false); return; }
+  Object.assign(p, { x: checkpoint.x, y: checkpoint.y, vx: 0, vy: 0, invuln: PHYS.invuln, hurtT: 0, gliding: false, canCut: false, glideLeft: PHYS.glideTime });
+}
+
+function updateCats(dt) {
+  const p = player;
+  for (const cat of cats) {
+    if (!cat.alive) { cat.squish -= dt; continue; }
+    if (Math.abs(cat.x - cam.x - VW / 2) > VW) continue;
+    cat.vy = Math.min(PHYS.maxFall, cat.vy + PHYS.grav * dt);
+    moveY(cat, cat.vy * dt);
+    const aheadX = cat.dir > 0 ? cat.x + cat.w + 1 : cat.x - 1;
+    const footR = Math.floor((cat.y + cat.h + 1) / T), aheadC = Math.floor(aheadX / T);
+    if (cat.onGround && !solidAt(aheadC, footR) && !oneWayAt(aheadC, footR)) cat.dir *= -1;
+    else if (moveX(cat, cat.dir * CAT_SPEED * dt)) cat.dir *= -1;
+    cat.anim += dt;
+    if (state === 'playing' && overlap(p, cat)) {
+      if (p.vy > 0 && p.prevBottom <= cat.y + 6) {
+        cat.alive = false; cat.squish = 0.45;
+        p.vy = keys.down.has('jump') ? -PHYS.bounceHigh : -PHYS.bounce;
+        p.canCut = false; p.glideLeft = PHYS.glideTime; p.gliding = false;
+        SFX.stomp(); puff(cat.x + cat.w / 2, cat.y + cat.h, 8, ['#f3e3c3', '#7d6a8f'], 60, 0.4);
+      } else hurt(cat.x + cat.w / 2);
+    }
+  }
+  cats = cats.filter(c => c.alive || c.squish > 0);
+}
+
+function updateCrows(dt) {
+  const p = player, pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
+  for (const cr of crows) {
+    cr.t += dt;
+    const cx = cr.x + cr.w / 2, cy = cr.y + cr.h / 2;
+    if (cr.state === 'perch') {
+      cr.face = pcx < cx ? -1 : 1;
+      if (state === 'playing' && Math.abs(pcx - cx) < CROW_RANGE && cr.x > cam.x && cr.x < cam.x + VW) {
+        const dx = pcx - cx, dy = pcy - cy, d = Math.hypot(dx, dy) || 1;
+        cr.vx = dx / d * CROW_SPEED; cr.vy = dy / d * CROW_SPEED; cr.dive = d / CROW_SPEED;
+        cr.state = 'dive'; cr.face = Math.sign(cr.vx) || -1; SFX.caw();
+      }
+    } else {
+      if (cr.state === 'dive') { cr.dive -= dt; if (cr.dive <= 0) cr.state = 'leave'; }
+      else { cr.vy = Math.max(-200, cr.vy - 520 * dt); }
+      cr.x += cr.vx * dt; cr.y += cr.vy * dt;
+      if (cr.y < -40 || cr.x < cam.x - 80 || cr.x > cam.x + VW + 80) cr.dead = true;
+    }
+    if (state === 'playing' && !cr.dead && overlap(p, cr)) hurt(cx);
+  }
+  crows = crows.filter(c => !c.dead);
+}
+
+function updateItems() {
+  const p = player, box = { x: 0, y: 0, w: 8, h: 8 };
+  for (const l of letters) {
+    if (l.got) continue;
+    box.x = l.x - 4; box.y = l.y - 4;
+    if (overlap(p, box)) { l.got = true; gotLetters++; SFX.letter(); puff(l.x, l.y, 5, ['#ffffff', '#ffe08a'], 50, 0.35); }
+  }
+  for (const k of parcels) {
+    if (k.got) continue;
+    box.x = k.x - 5; box.y = k.y - 5; box.w = box.h = 10;
+    if (overlap(p, box)) { k.got = true; gotParcels++; SFX.parcel(); puff(k.x, k.y, 14, ['#ffd34d', '#ffffff', '#c8403a'], 80, 0.6); }
+  }
+  if (lamp && !lamp.lit && p.x + p.w / 2 >= lamp.x) {
+    lamp.lit = true; checkpoint = { x: lamp.x - 5, y: lamp.base - 14 };
+    SFX.checkpoint(); puff(lamp.x, lamp.base - 38, 10, ['#ffe08a', '#ffffff'], 50, 0.5);
+    showHint('路燈亮了：之後掉下去會從這裡重來');
+  }
+  if (mailbox && overlap(p, { x: mailbox.x + 2, y: mailbox.y, w: 12, h: mailbox.h })) endRun(true);
+}
+
+let smokeT = 0;
+function updateParticles(dt) {
+  smokeT -= dt;
+  if (smokeT <= 0) {
+    smokeT = 0.18;
+    const c0 = Math.floor(cam.x / T) - 1, c1 = c0 + VW / T + 3;
+    for (let c = c0; c <= c1; c++) for (let r = 0; r < LH; r++) {
+      if (tileAt(c, r) === 'C' && tileAt(c, r - 1) !== 'C' && Math.random() < 0.6)
+        particles.push({ x: c * T + 6 + Math.random() * 4, y: r * T - 1, vx: 6 + Math.random() * 6, vy: -14 - Math.random() * 8, life: 2.2, max: 2.2, col: '#b9a7c9', size: 2, grav: 0, smoke: true });
+    }
+  }
+  for (const q of particles) { q.life -= dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += q.grav * dt; }
+  particles = particles.filter(q => q.life > 0);
+}
+
+function updateCamera(dt, snap) {
+  const p = player;
+  const target = p.x + p.w / 2 - VW * 0.42 + p.face * 24;
+  cam.x = snap ? target : cam.x + (target - cam.x) * Math.min(1, dt * 5);
+  cam.x = Math.max(0, Math.min(LW * T - VW, cam.x));
+}
+
+function updateHints() {
+  const col = (player.x + player.w / 2) / T;
+  for (const h of HINTS) if (!hintsShown.has(h.col) && col >= h.col) { hintsShown.add(h.col); showHint(h.text); }
+}
+
+/* ===== 狀態機 ===== */
+let state = 'title', endT = 0, endKind = null;
+const $ = id => document.getElementById(id);
+const panels = { title: $('titlePanel'), pause: $('pausePanel'), result: $('resultPanel') };
+function showPanel(name) {
+  for (const [k, el] of Object.entries(panels)) el.classList.toggle('hidden', k !== name);
+  const btn = name && panels[name].querySelector('.cta');
+  if (btn) btn.focus({ preventScroll: true });
+  else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+let hintTimer = 0;
+function showHint(text) {
+  const el = $('hint'); el.textContent = text; el.classList.add('show');
+  clearTimeout(hintTimer); hintTimer = setTimeout(() => el.classList.remove('show'), 3800);
+}
+function hideHint() { clearTimeout(hintTimer); $('hint').classList.remove('show'); }
+
+function startGame() {
+  audioInit();
+  resetLevel(); updateCamera(0, true);
+  state = 'playing'; endKind = null;
+  showPanel(null); hideHint();
+  musicStart(); musicDuck(false);
+}
+function pauseGame() {
+  if (state !== 'playing') return;
+  state = 'paused'; setWind(false); musicDuck(true); hideHint(); showPanel('pause');
+}
+function resumeGame() {
+  if (state !== 'paused') return;
+  audioInit(); state = 'playing'; musicDuck(false); showPanel(null);
+  keys.pressed.clear();
+}
+function endRun(cleared) {
+  if (state !== 'playing') return;
+  state = 'ending'; endKind = cleared ? 'clear' : 'over'; endT = cleared ? 1.4 : 1.2;
+  musicStop(); setWind(false); hideHint();
+  if (cleared) {
+    SFX.clear(); player.vx = 0;
+    for (let i = 0; i < 4; i++) setTimeout(() => puff(mailbox.x + 8, mailbox.y + 8, 10, ['#ffffff', '#ffe08a', '#c8403a'], 90, 0.8, 120), i * 180);
+  } else SFX.over();
+}
+function showResult() {
+  const cleared = endKind === 'clear';
+  const isNew = { time: false, letters: false, parcels: false };
+  if (cleared && (record.bestTime == null || runTime < record.bestTime)) { record.bestTime = runTime; isNew.time = true; }
+  if (gotLetters > record.bestLetters) { record.bestLetters = gotLetters; isNew.letters = true; }
+  if (gotParcels > record.bestParcels) { record.bestParcels = gotParcels; isNew.parcels = true; }
+  saveRecord();
+  const pm = $('postmark');
+  pm.textContent = cleared ? '已送達' : '退件';
+  pm.className = 'postmark ' + (cleared ? 'ok' : 'ng');
+  $('resultTitle').textContent = cleared ? '信送到了' : '這趟沒送到';
+  $('resultLine').textContent = cleared
+    ? (gotLetters === totalLetters && gotParcels === totalParcels ? '一封不漏，包裹也全數送達。' : '還有散落的信件和包裹，下一趟試著全部收齊。')
+    : '愛心用完了。從頭再出發一次吧。';
+  const tag = n => n ? '<span class="new">NEW</span>' : '';
+  $('scoreBody').innerHTML =
+    `<tr><td>時間</td><td><b>${cleared ? fmtTime(runTime) : '未送達'}</b>${tag(isNew.time)}</td><td>${record.bestTime == null ? '尚無' : fmtTime(record.bestTime)}</td></tr>` +
+    `<tr><td>信件</td><td><b>${gotLetters} / ${totalLetters}</b>${tag(isNew.letters)}</td><td>${record.bestLetters} / ${totalLetters}</td></tr>` +
+    `<tr><td>包裹</td><td><b>${gotParcels} / ${totalParcels}</b>${tag(isNew.parcels)}</td><td>${record.bestParcels} / ${totalParcels}</td></tr>`;
+  state = 'result'; showPanel('result'); renderTitleRecord();
+}
+function renderTitleRecord() {
+  const el = $('titleRecord');
+  if (record.bestTime == null && record.bestLetters === 0) { el.innerHTML = '<dd class="empty">還沒有紀錄，第一趟出發吧。</dd>'; return; }
+  el.innerHTML = `<dt>最快送達</dt><dd>${record.bestTime == null ? '尚未送達' : fmtTime(record.bestTime)}</dd>` +
+    `<dt>最多信件</dt><dd>${record.bestLetters} / ${totalLetters}</dd><dt>最多包裹</dt><dd>${record.bestParcels} / ${totalParcels}</dd>`;
+}
+function onMetaKey(a) {
+  if (a === 'mute') { setMute(!A.muted); return; }
+  if (a === 'enter') {
+    if (state === 'title' || state === 'result') startGame();
+    else if (state === 'paused') resumeGame();
+  } else if (a === 'pause') {
+    if (state === 'playing') pauseGame(); else if (state === 'paused') resumeGame();
+  } else if (a === 'restart') {
+    if (state !== 'title') startGame();
+  }
+}
+$('startBtn').addEventListener('click', startGame);
+$('againBtn').addEventListener('click', startGame);
+$('resumeBtn').addEventListener('click', resumeGame);
+
+/* ===== 渲染 ===== */
+const canvas = $('game'), ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+let SKY, SUN, CLOUDS, CITY, TILES;
+let clock = 0;
+function spr(name, x, y, flip) { const s = SPR[name]; ctx.drawImage(flip ? s.f : s.n, Math.round(x), Math.round(y)); }
+
+function foxFrame() {
+  const p = player;
+  if (state === 'ending' && endKind === 'over') return 'fox_hurt';
+  if (p.hurtT > 0) return 'fox_hurt';
+  if (!p.onGround) return p.glideActive ? 'fox_glide' : (p.vy < 0 ? 'fox_jump' : 'fox_fall');
+  if (Math.abs(p.vx) > 10) return 'fox_run' + (Math.floor(p.runDist / 7) % 4 + 1);
+  return Math.floor(clock * 2) % 2 ? 'fox_idle2' : 'fox_idle';
+}
+
+function drawLamp(cx) {
+  const x = lamp.x - cx, b = lamp.base;
+  ctx.fillStyle = '#2b1b33';
+  ctx.fillRect(x - 1, b - 40, 2, 40); ctx.fillRect(x - 3, b - 3, 6, 3);
+  ctx.fillRect(x - 1, b - 42, 7, 2); ctx.fillRect(x + 4, b - 42, 2, 4);
+  if (lamp.lit) {
+    ctx.globalAlpha = 0.18 + Math.sin(clock * 6) * 0.04; ctx.fillStyle = '#ffe08a';
+    ctx.beginPath(); ctx.arc(x + 5, b - 34, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.moveTo(x, b - 36); ctx.lineTo(x + 10, b - 36); ctx.lineTo(x + 22, b); ctx.lineTo(x - 12, b); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = lamp.lit ? '#ffe08a' : '#6b6080'; ctx.fillRect(x + 2, b - 38, 6, 4);
+  ctx.fillStyle = '#2b1b33'; ctx.fillRect(x + 1, b - 39, 8, 1);
+}
+
+function render() {
+  const cx = Math.round(cam.x);
+  ctx.drawImage(SKY, 0, 0);
+  ctx.drawImage(SUN, Math.round(318 - cx * 0.03), 128);
+  ctx.drawImage(CLOUDS, Math.round(cx * 0.2), 0, VW, VH, 0, 0, VW, VH);
+  ctx.drawImage(CITY, Math.round(cx * 0.5), 0, VW, VH, 0, 0, VW, VH);
+  ctx.drawImage(TILES, cx, 0, VW, VH, 0, 0, VW, VH);
+
+  for (const q of particles) if (q.smoke) {
+    ctx.globalAlpha = Math.max(0, q.life / q.max) * 0.55; ctx.fillStyle = q.col;
+    const s = q.size + (1 - q.life / q.max) * 4; ctx.fillRect(Math.round(q.x - cx - s / 2), Math.round(q.y - s / 2), Math.round(s), Math.round(s));
+  }
+  ctx.globalAlpha = 1;
+  if (lamp) drawLamp(cx);
+  if (mailbox) spr('mailbox', mailbox.x - cx, mailbox.y);
+  for (const l of letters) if (!l.got && Math.abs(l.x - cx - VW / 2) < VW) spr('letter', l.x - 5 - cx, l.y - 4 + Math.round(Math.sin(clock * 3 + l.x * 0.05) * 1.5));
+  for (const k of parcels) if (!k.got) {
+    const y = k.y - 6 + Math.round(Math.sin(clock * 2.5) * 2);
+    spr('parcel', k.x - 6 - cx, y);
+    if (Math.floor(clock * 4 + k.x) % 3 === 0) { ctx.fillStyle = '#fff6c8'; ctx.fillRect(Math.round(k.x - cx + 7), y - 2, 1, 3); ctx.fillRect(Math.round(k.x - cx + 6), y - 1, 3, 1); }
+  }
+  for (const cat of cats) {
+    if (!cat.alive) spr('cat_squish', cat.x - 1 - cx, cat.y - 2);
+    else spr(Math.floor(cat.anim * 6) % 2 ? 'cat2' : 'cat1', cat.x - 1 - cx, cat.y - 2, cat.dir > 0);
+  }
+  for (const cr of crows) {
+    const name = cr.state === 'perch' ? 'crow_perch' : (Math.floor(cr.t * 10) % 2 ? 'crow_fly1' : 'crow_fly2');
+    spr(name, cr.x - 2 - cx, cr.y - 2, cr.face < 0);
+  }
+  const p = player;
+  const blink = p.invuln > 0 && state === 'playing' && Math.floor(p.invuln * 12) % 2 === 0;
+  if (!blink && !(state === 'ending' && endKind === 'clear' && endT < 1.0)) spr(foxFrame(), p.x - 3 - cx, p.y - 2, p.face < 0);
+  for (const q of particles) if (!q.smoke) {
+    ctx.globalAlpha = Math.min(1, q.life / q.max * 1.5); ctx.fillStyle = q.col;
+    ctx.fillRect(Math.round(q.x - cx), Math.round(q.y), q.size, q.size);
+  }
+  ctx.globalAlpha = 1;
+  if (state !== 'title') drawHUD();
+}
+
+function drawHUD() {
+  ctx.fillStyle = 'rgba(27,20,48,0.45)'; ctx.fillRect(0, 0, VW, 20);
+  for (let i = 0; i < 3; i++) spr(i < player.hearts ? 'heart' : 'heart_empty', 6 + i * 12, 6);
+  spr('letter', 176, 6); drawText(ctx, `${gotLetters}/${totalLetters}`, 190, 5, 2, '#fbe6c8');
+  spr('parcel', 254, 4); drawText(ctx, `${gotParcels}/${totalParcels}`, 270, 5, 2, '#fbe6c8');
+  drawText(ctx, fmtTime(runTime), VW - 6, 5, 2, '#fbe6c8', 'right');
+  if (A.muted) {
+    const x = VW - 18, y = 25; ctx.fillStyle = '#fbe6c8';
+    ctx.fillRect(x, y + 2, 3, 4); ctx.fillRect(x + 3, y + 1, 1, 6); ctx.fillRect(x + 4, y, 1, 8);
+    ctx.fillStyle = '#e86a5c'; for (let i = 0; i < 5; i++) { ctx.fillRect(x + 7 + i, y + 1 + i, 1, 1); ctx.fillRect(x + 11 - i, y + 1 + i, 1, 1); }
+  }
+}
+
+/* ===== 主迴圈 ===== */
+function update(dt) {
+  clock += dt;
+  if (state === 'playing') {
+    if (!timerOn && (keys.down.has('left') || keys.down.has('right') || keys.down.has('jump'))) timerOn = true;
+    if (timerOn) runTime += dt;
+    updatePlayer(dt);
+    updateCats(dt);
+    updateCrows(dt);
+    if (state === 'playing') updateItems();
+    if (state === 'playing') updateHints();
+    setWind(player.glideActive && state === 'playing');
+    updateCamera(dt);
+  } else if (state === 'ending') {
+    endT -= dt;
+    if (endKind === 'over') { player.vy = Math.min(PHYS.maxFall, player.vy + PHYS.grav * dt); player.y += player.vy * dt; }
+    if (endT <= 0) showResult();
+  } else if (state === 'title') {
+    for (const c of cats) c.anim += dt;
+    for (const c of crows) c.t += dt;
+  }
+  if (state !== 'paused') updateParticles(dt);
+  keys.pressed.clear();
+}
+let last = performance.now(), acc = 0;
+function frame(now) {
+  acc += Math.min(0.25, (now - last) / 1000); last = now;
+  while (acc >= STEP) { update(STEP); acc -= STEP; }
+  render();
+  requestAnimationFrame(frame);
+}
+
+function fit() {
+  let s = Math.min(innerWidth / VW, innerHeight / VH);
+  if (s >= 1) s = Math.floor(s);
+  const st = $('stage');
+  st.style.width = VW * s + 'px'; st.style.height = VH * s + 'px';
+  st.style.setProperty('--s', s);
+}
+addEventListener('resize', fit);
+
+loadRecord();
+SKY = buildSky(); SUN = buildSun(); CLOUDS = buildClouds(); CITY = buildCity(); TILES = buildTiles();
+resetLevel(); updateCamera(0, true);
+drawStamp(); renderTitleRecord(); fit();
+showPanel('title');
+requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });
+</script>
+</body>
+</html>
